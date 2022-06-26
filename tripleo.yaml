@@ -19,10 +19,16 @@ parameters:
   ExternalComputeCount:
     type: number
     default: 0
+  CephStorageCount:
+    type: number
+    default: 0
   ControllerFlavor:
     type: string
     default: ci.m4.xlarge
   ComputeFlavor:
+    type: string
+    default: m1.small
+  CephFlavor:
     type: string
     default: m1.small
   UndercloudFlavor:
@@ -294,6 +300,18 @@ resources:
             network_config:
               template: /home/stack/net_config_multiple_nics.j2
           instances: {get_attr: [Computes, BaremetalDeployInput]}
+        - name: CephStorage
+          count: {get_param: CephStorageCount}
+          defaults:
+            managed: false
+            networks:
+              - network: ctlplane
+              - network: storage
+              - network: storage_mgmt
+              - network: external
+            network_config:
+              template: /home/stack/net_config_ceph_multiple_nics.j2
+          instances: {get_attr: [CephStorage, BaremetalDeployInput]}
 
   DeployedServerPortMap:
     type: OS::Heat::Value
@@ -459,6 +477,31 @@ resources:
           ManagementNetwork: {get_resource: ManagementNetwork}
           DeployNetwork: {get_resource: DeployNetwork}
           RoleLower: external-novacompute
+
+  CephStorage:
+    type: OS::Heat::ResourceGroup
+    depends_on:
+      - DeploySubnet
+      - ManagementSubnet
+    properties:
+      count: {get_param: CephStorageCount}
+      resource_def:
+        type: overcloud-ceph-storage.yaml
+        properties:
+          flavor: {get_param: CephFlavor}
+          key_name: {get_resource: KeyPair}
+          name:
+            list_join:
+              - '-'
+              - - {get_param: OS::stack_name}
+                - 'ceph-storage'
+                - '%index%'
+          image: {get_param: OvercloudImage}
+          index: |
+            %index%
+          SubnetStart: 150
+          ManagementNetwork: {get_resource: ManagementNetwork}
+          DeployNetwork: {get_resource: DeployNetwork}
 
 outputs:
   UndercloudFloatingIP:

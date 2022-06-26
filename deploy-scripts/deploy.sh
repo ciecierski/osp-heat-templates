@@ -14,6 +14,7 @@ date
 ./02-network-provision.sh
 ./03-vip-provision.sh
 ./04-node-provision.sh
-./05-overcloud-deploy.sh
+./05-ceph-deploy.sh
+./06-overcloud-deploy.sh
 
 date

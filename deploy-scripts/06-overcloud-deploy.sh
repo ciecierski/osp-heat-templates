@@ -1,6 +1,6 @@
 #!/bin/bash
 
-exec > >(tee -a 05-overcloud-deploy.log)
+exec > >(tee -a 06-overcloud-deploy.log)
 exec 2>&1
 
 set -eux
@@ -18,6 +18,8 @@ time openstack overcloud deploy \
   -e /home/stack/overcloud-network-deployed-${STACK_NAME}.yaml \
   -e /home/stack/overcloud-vip-deployed-${STACK_NAME}.yaml \
   -e /home/stack/overcloud-baremetal-deployed-${STACK_NAME}.yaml \
+  -e /home/stack/overcloud-ceph-deployed.yaml \
+  -e /usr/share/openstack-tripleo-heat-templates/environments/cephadm/cephadm.yaml \
   -e /home/stack/overcloud-environment.yaml \
   -e /home/stack/container-image-prepare.yaml \
   $@

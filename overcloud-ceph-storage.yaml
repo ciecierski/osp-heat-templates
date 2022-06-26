@@ -17,15 +17,10 @@ parameters:
     type: string
   DeployNetwork:
     type: string
-  PackageManagerName:
-    type: string
-    default: dnf
-  RoleLower:
-    type: string
 
 resources:
 
-  OvercloudServer:
+  CephStorageServer:
     type: OS::Nova::Server
     properties:
       flavor: {get_param: flavor}
@@ -41,10 +36,6 @@ resources:
           fixed_ip: {get_attr: [StorageIP, value]}
         - network: {get_param: DeployNetwork}
           fixed_ip: {get_attr: [StorageMgmtIP, value]}
-        - network: {get_param: DeployNetwork}
-          fixed_ip: {get_attr: [InternalApiIP, value]}
-        - network: {get_param: DeployNetwork}
-          fixed_ip: {get_attr: [TenantIP, value]}
         - network: {get_param: DeployNetwork}
           fixed_ip: {get_attr: [ExternalIP, value]}
       user_data: {get_resource: OvercloudUserData}
@@ -148,63 +139,50 @@ resources:
                   ip_base: {get_param: SubnetStart}
                   index: {get_param: index}
 
-  OvercloudServerUserData:
+  CephStorageServerUserData:
     type: server-user-data.yaml
 
   OvercloudOsNetConfigUserData:
     type: OS::Heat::SoftwareConfig
     properties:
-      config:
-        str_replace:
-          template: |
-            #!/usr/bin/bash
-            sudo PACKAGE_MANAGER_NAME -y install os-net-config openvswitch jq lvm2
-          params:
-            PACKAGE_MANAGER_NAME: {get_param: PackageManagerName}
+      config: |
+        #!/usr/bin/bash
+        sudo dnf -y install os-net-config openvswitch lvm2 jq
 
   OvercloudUserData:
     type: OS::Heat::MultipartMime
     properties:
       parts:
         list_concat:
-          - {get_attr: [OvercloudServerUserData, ServerUserData]}
+          - {get_attr: [CephStorageServerUserData, ServerUserData]}
           - - config: {get_resource: OvercloudOsNetConfigUserData}
               subtype: x-shellscript
 
-  MappedName:
-    type: OS::Heat::Value
+  CephVolumes:
+    type: OS::Cinder::Volume
     properties:
-      value:
-        list_join:
-          - '-'
-          - - overcloud
-            - {get_param: RoleLower}
-            - str_replace:
-                template: index
-                params:
-                  index: {get_param: index}
+      size: 60
 
-  MappedIP:
-    type: OS::Heat::Value
+  CephVolumesAttachment:
+    type: OS::Cinder::VolumeAttachment
+    depends_on: CephStorageServer
     properties:
-      value:
-        map_replace:
-          - ip_address: v
-          - values:
-              v: {get_attr: [CtlplaneIP, value]}
+      volume_id: { get_resource: CephVolumes }
+      instance_uuid: { get_resource: CephStorageServer }
+      mountpoint: /dev/sdb
 
 outputs:
   OS::stack_id:
     description: OS::stack_id
-    value: {get_resource: OvercloudServer}
+    value: {get_resource: CephStorageServer}
   name:
     description: name
-    value: {get_attr: [OvercloudServer, name]}
+    value: {get_attr: [CephStorageServer, name]}
   BaremetalDeployInput:
     description: BaremetalDeployInput
     value:
-      hostname: {get_attr: [OvercloudServer, name]}
-      name: {get_attr: [OvercloudServer, name]}
+      hostname: {get_attr: [CephStorageServer, name]}
+      name: {get_attr: [CephStorageServer, name]}
       networks:
         - network: ctlplane
           fixed_ip: {get_attr: [CtlplaneIP, value]}
@@ -212,33 +190,5 @@ outputs:
           fixed_ip: {get_attr: [StorageIP, value]}
         - network: storage_mgmt
           fixed_ip: {get_attr: [StorageMgmtIP, value]}
-        - network: internal_api
-          fixed_ip: {get_attr: [InternalApiIP, value]}
-        - network: tenant
-          fixed_ip: {get_attr: [TenantIP, value]}
         - network: external
           fixed_ip: {get_attr: [ExternalIP, value]}
-  DeployedServerPortMap:
-    description: DeployedServerPortMap
-    value:
-      map_replace:
-        - k:
-            fixed_ips:
-              - {get_attr: [MappedIP, value]}
-            subnets:
-              - cidr: 24
-        - keys:
-            k:
-              list_join:
-                - '-'
-                - - {get_param: name}
-                  - ctlplane
-  HostnameMap:
-    description: HostnameMap
-    value:
-      map_replace:
-        - k: v
-        - keys:
-            k: {get_attr: [MappedName, value]}
-          values:
-            v: {get_param: name}
